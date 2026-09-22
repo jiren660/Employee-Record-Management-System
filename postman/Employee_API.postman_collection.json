@@ -1,0 +1,178 @@
+{
+  "info": {
+    "_postman_id": "8f6c4a12-9b24-4e4b-971a-e64e528df529",
+    "name": "Employee Management Web Application API",
+    "description": "ADS133 Hands-on Activity: Complete RESTful API for Employee Management System using PHP and MySQL. Endpoints for GET, POST, PUT, and DELETE operations.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Test Database Connection",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost/employee_management/test_connection.php",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "employee_management",
+            "test_connection.php"
+          ]
+        },
+        "description": "Verifies that the PDO MySQL database connection is established and returns a successful JSON status."
+      },
+      "response": []
+    },
+    {
+      "name": "1. GET - Retrieve All Employees",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost/employee_management/employee_api.php",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "employee_management",
+            "employee_api.php"
+          ]
+        },
+        "description": "Fetches the complete directory of employees ordered by ID descending."
+      },
+      "response": []
+    },
+    {
+      "name": "2. GET - Retrieve One Employee by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost/employee_management/employee_api.php?id=1",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "employee_management",
+            "employee_api.php"
+          ],
+          "query": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "description": "Retrieves the full record of a single employee matching the query parameter id."
+      },
+      "response": []
+    },
+    {
+      "name": "3. POST - Add New Employee",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Juan Dela Cruz\",\n  \"email\": \"juan@example.com\",\n  \"position\": \"Software Developer\",\n  \"salary\": 35000\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost/employee_management/employee_api.php",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "employee_management",
+            "employee_api.php"
+          ]
+        },
+        "description": "Creates a new employee record using a raw JSON payload with Content-Type: application/json."
+      },
+      "response": []
+    },
+    {
+      "name": "4. PUT - Update Existing Employee",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": 1,\n  \"name\": \"Juan Dela Cruz\",\n  \"email\": \"juan.updated@example.com\",\n  \"position\": \"Senior Developer\",\n  \"salary\": 45000\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost/employee_management/employee_api.php",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "employee_management",
+            "employee_api.php"
+          ]
+        },
+        "description": "Updates an existing employee record by ID with a raw JSON payload."
+      },
+      "response": []
+    },
+    {
+      "name": "5. DELETE - Delete Employee",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost/employee_management/employee_api.php?id=1",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "employee_management",
+            "employee_api.php"
+          ],
+          "query": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "description": "Removes an employee record from the database by ID."
+      },
+      "response": []
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+# Ignore temporary scratch directories and images
+scratch/
+.tempmediaStorage/
+*.log
