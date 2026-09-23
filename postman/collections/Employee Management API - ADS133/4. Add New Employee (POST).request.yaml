@@ -1,0 +1,18 @@
+$kind: http-request
+url: http://localhost/ADS133/api/employee_api.php
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "first_name": "Alice",
+      "middle_initial": "M",
+      "last_name": "Brown",
+      "mobile_number": "09987654321",
+      "email": "alice.postman@example.com",
+      "sex": "Female",
+      "job_title": "Fullstack Software Engineer"
+    }
+order: 4000

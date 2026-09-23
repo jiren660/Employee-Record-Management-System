@@ -1,0 +1,6 @@
+$kind: http-request
+url: http://localhost/ADS133/api/employee_api.php?id=1
+method: DELETE
+queryParams:
+  id: "1"
+order: 6000

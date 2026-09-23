@@ -1,0 +1,19 @@
+$kind: http-request
+url: http://localhost/ADS133/api/employee_api.php
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "id": 1,
+      "first_name": "John",
+      "middle_initial": "A",
+      "last_name": "Doe",
+      "mobile_number": "1122334455",
+      "email": "john.doe@example.com",
+      "sex": "Male",
+      "job_title": "Project Manager"
+    }
+order: 5000

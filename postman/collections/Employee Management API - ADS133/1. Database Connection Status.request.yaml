@@ -1,0 +1,4 @@
+$kind: http-request
+url: http://localhost/ADS133/api/test_connection.php
+method: GET
+order: 1000
