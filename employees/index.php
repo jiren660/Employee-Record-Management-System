@@ -1,247 +1,333 @@
+<?php
+/**
+ * Employee Management System - Main GUI (HTML + PHP)
+ * Western Mindanao State University - College of Computing Studies
+ * Reference: 03-Simple-Web-Application-Development-with-API-implementation.pdf (Pages 6, 11, 12, 15, 18)
+ */
+
+$dbPath = file_exists('../api/database.php') ? '../api/database.php' : (file_exists('api/database.php') ? 'api/database.php' : 'database.php');
+$testPath = file_exists('../class/DbTest.php') ? '../class/DbTest.php' : (file_exists('class/DbTest.php') ? 'class/DbTest.php' : 'DbTest.php');
+
+require_once $dbPath;
+require_once $testPath;
+
+$database = new Database();
+$conn = $database->getConnection();
+
+$test = new DbTest($conn);
+$connectionStatus = $test->checkConnection();
+
+$cssPath = file_exists('../style/style.css') ? '../style/style.css' : (file_exists('style/style.css') ? 'style/style.css' : 'style.css');
+$jsFuncPath = file_exists('../javascript/functions.js') ? '../javascript/functions.js' : (file_exists('javascript/functions.js') ? 'javascript/functions.js' : 'functions.js');
+$empJsPath = file_exists('employee.js') ? 'employee.js' : 'employees/employee.js';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Employee Management System built with Core PHP, MySQL, REST API, Pure CSS, and Vanilla JavaScript Fetch API.">
-  <meta name="author" content="ADS133 Activity">
-  <title>Employee Management System | ADS133 REST API</title>
-  
-  <!-- Modern Clean Font: Plus Jakarta Sans -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-  <link rel="stylesheet" href="style.css">
+  <title>Management Information System</title>
+  <link rel="stylesheet" href="<?= $cssPath ?>?v=<?= time() ?>">
+  <style>
+    <?php
+    $rawCssPath = dirname(__DIR__) . '/style/style.css';
+    if (!file_exists($rawCssPath)) $rawCssPath = __DIR__ . '/../style/style.css';
+    if (!file_exists($rawCssPath)) $rawCssPath = __DIR__ . '/style/style.css';
+    if (!file_exists($rawCssPath)) $rawCssPath = __DIR__ . '/style.css';
+    if (file_exists($rawCssPath)) include $rawCssPath;
+    ?>
+  </style>
+  <script src="<?= $jsFuncPath ?>"></script>
+  <script src="<?= $empJsPath ?>?v=<?= time() ?>"></script>
 </head>
 <body>
 
   <!-- Floating Toast Notifications -->
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
-  <div class="app-container">
-    <!-- Top Navigation Bar -->
-    <nav class="navbar">
-      <div class="brand-container">
-        <div class="brand-logo-mark" aria-hidden="true">EM</div>
-        <div class="brand-info">
-          <span class="brand-title">Employee<span class="brand-accent">Studio</span></span>
-          <span class="brand-badge">ADS133</span>
-        </div>
-      </div>
-      <div class="nav-actions">
-        <div id="connectionPill" class="status-pill" title="Current MySQL Connection Status">
-          <span class="status-dot"></span>
-          <span>Checking DB...</span>
-        </div>
-        <button id="testConnectionBtn" class="btn btn-secondary btn-sm" title="Ping MySQL via test_connection.php">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-          Test DB
-        </button>
-      </div>
-    </nav>
+  <!-- Header (PDF 3 Page 11) -->
+  <div class="header">
+    <div class="navbar">
+      <button id="menu-toggle" class="menu-toggle" aria-label="Toggle navigation menu">&#9776;</button>
+      <div class="logo">Management Information System</div>
+      <ul class="menu">
+        <li><a href="#">Departments</a></li>
+        <li><a href="../employees/" class="active">Employees</a></li>
+        <li><a href="#">Products</a></li>
+        <li><a href="#">Orders</a></li>
+      </ul>
+    </div>
+  </div>
 
-    <!-- Editorial Hero Section (Inspired by Human Figma Design) -->
-    <section class="hero-section">
-      <div class="hero-kicker">Core PHP &bull; MySQL &bull; REST API &bull; Fetch API</div>
-      <h1 class="hero-title">
-        Employee Record <mark class="highlight-lime">Management System</mark>
-      </h1>
-      <p class="hero-description">
-        Manage company personnel records with direct PDO database transactions, RESTful endpoints, and asynchronous Fetch requests.
-      </p>
-    </section>
+  <!-- Status Container Below the Header (PDF 3 Page 11) -->
+  <div class="status-container">
+    Database Connection Status:
+    <span id="connectionStatus" class="status <?= $connectionStatus['status'] === 'success' ? 'success' : 'error' ?>">
+      <?= htmlspecialchars($connectionStatus['message']) ?>
+    </span>
+    <button id="testConnectionBtn" class="btn-test-db" onclick="runConnectionTest()" title="Ping MySQL via test_connection.php">Test DB</button>
+  </div>
 
-    <!-- Main Data Table Container -->
-    <main class="table-card" id="tableCard">
-      <div class="table-header-bar">
-        <div class="table-title">
-          <h2>Employee Directory</h2>
-          <span id="tableCounter" class="badge-counter">0 Employees</span>
+  <!-- Employee Table (PDF 3 Page 12) -->
+  <div class="container">
+    <div class="table-container">
+      <div class="page-header">
+        <div class="page-title">
+          Employee List
+          <span id="recordCount" class="record-badge">0 Employees</span>
         </div>
-        <button id="tableAddBtn" class="btn btn-primary btn-sm">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Add Employee
-        </button>
+        <button class="add-btn" onclick="openAddEmployeeModal()">+Add Employee</button>
       </div>
 
+      <!-- Search and Filter Section (PDF 3 Page 12) -->
+      <div class="search-filter">
+        <input type="text" id="searchBox" placeholder="Search by Name..." onkeyup="filterEmployees()">
+        
+        <div class="filter-controls">
+          <!-- Gender Filter -->
+          <select id="filterSex" onchange="filterEmployees()">
+            <option value="">Filter by Gender</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
+
+          <!-- Job Title Filter -->
+          <select id="filterJobTitle" onchange="filterEmployees()">
+            <option value="">Select Job Title</option>
+            <option value="Project Manager">Project Manager</option>
+            <option value="Business Analyst">Business Analyst</option>
+            <option value="Fullstack Software Engineer">Fullstack Software Engineer</option>
+            <option value="Front End Developer">Front End Developer</option>
+            <option value="Back End Developer">Back End Developer</option>
+            <option value="Quality Assurance Engineer">Quality Assurance Engineer</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Data Table with Crimson Header (PDF 3 Page 12) -->
       <div class="table-responsive">
-        <table class="data-table" id="employeeTable">
+        <table>
           <thead>
             <tr>
-              <th style="width: 70px;">ID</th>
-              <th>Employee Details</th>
-              <th>Position / Role</th>
-              <th>Department</th>
-              <th>Salary (USD)</th>
-              <th style="width: 150px; text-align: right;">Actions</th>
+              <th class="text-center" style="width: 60px;">ID</th>
+              <th>First Name</th>
+              <th class="text-center" style="width: 50px;">M.I.</th>
+              <th>Last Name</th>
+              <th>Mobile</th>
+              <th>Email</th>
+              <th class="text-center" style="width: 80px;">Sex</th>
+              <th>Job Title</th>
+              <th class="text-center" style="width: 150px;">Actions</th>
             </tr>
           </thead>
           <tbody id="employeeTableBody">
-            <!-- Dynamic Rows Injected by script.js -->
+            <!-- Dynamic rows will be loaded by employee.js -->
           </tbody>
         </table>
       </div>
 
-      <!-- Empty State Graphic -->
+      <!-- Empty State -->
       <div id="emptyState" class="empty-state" style="display: none;">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
         <h3>No Employees Found</h3>
-        <p>No records in the database. Click "Add Employee" to create your first record.</p>
+        <p>No records in the database. Click "+Add Employee" to create your first record.</p>
       </div>
-    </main>
-
-    <!-- Footer -->
-    <footer class="app-footer">
-      <p>ADS133 Application Development &bull; PHP MySQL Database Connection &bull; RESTful API &bull; Fetch API</p>
-    </footer>
+    </div>
   </div>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <p>Republic of the Philippines &bull; Western Mindanao State University &bull; College of Computing Studies &bull; ADS133</p>
+  </footer>
 
   <!-- =========================================================================
        MODALS
        ========================================================================= -->
 
-  <!-- 1. Add Employee Modal -->
-  <div id="addModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="addModalTitle">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3 id="addModalTitle">Add New Employee</h3>
-        <button class="modal-close-btn modal-close-trigger" aria-label="Close modal">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
+  <!-- Add Employee Modal (PDF 3 Page 15) -->
+  <div id="addEmployeeModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="addModalTitle">
+    <div class="modal-content">
+      <span class="close" onclick="closeAddEmployeeModal()">&times;</span>
+      <h3 id="addModalTitle">Add New Employee</h3>
+      <div class="form-grid">
+        <!-- First Column -->
+        <div class="form-group">
+          <div class="field-wrap">
+            <label for="first_name">First Name *</label>
+            <input type="text" id="first_name" placeholder="First Name" autocomplete="off">
+          </div>
+          <div class="field-wrap">
+            <label for="middle_initial">M.I.</label>
+            <input type="text" id="middle_initial" placeholder="M.I." maxlength="1" oninput="this.value = this.value.toUpperCase()">
+          </div>
+          <div class="field-wrap">
+            <label for="last_name">Last Name *</label>
+            <input type="text" id="last_name" placeholder="Last Name" autocomplete="off">
+          </div>
+          <div class="field-wrap">
+            <label for="mobile_number">Mobile Number *</label>
+            <input type="text" id="mobile_number" placeholder="Mobile Number" autocomplete="off">
+          </div>
+        </div>
+
+        <!-- Second Column -->
+        <div class="form-group">
+          <div class="field-wrap">
+            <label for="email">Email *</label>
+            <input type="email" id="email" placeholder="Email" autocomplete="off">
+          </div>
+          <div class="field-wrap">
+            <label for="sex">Gender Selection *</label>
+            <select id="sex">
+              <option value="">Select Gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+          </div>
+          <div class="field-wrap">
+            <label for="job_title">Job Title Selection *</label>
+            <select id="job_title">
+              <option value="Select Job Title">Select Job Title</option>
+              <option value="Project Manager">Project Manager</option>
+              <option value="Business Analyst">Business Analyst</option>
+              <option value="Fullstack Software Engineer">Fullstack Software Engineer</option>
+              <option value="Front End Developer">Front End Developer</option>
+              <option value="Back End Developer">Back End Developer</option>
+              <option value="Quality Assurance Engineer">Quality Assurance Engineer</option>
+            </select>
+          </div>
+        </div>
       </div>
-      <form id="addEmployeeForm">
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="addName">Full Name *</label>
-            <input type="text" id="addName" required placeholder="e.g. Brandon Stark" autocomplete="off">
-          </div>
-          <div class="form-group">
-            <label for="addEmail">Email Address *</label>
-            <input type="email" id="addEmail" required placeholder="e.g. b.stark@enterprise.com" autocomplete="off">
-          </div>
-          <div class="form-group">
-            <label for="addPosition">Job Title / Position *</label>
-            <input type="text" id="addPosition" required placeholder="e.g. Full Stack Engineer" autocomplete="off">
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="addDepartment">Department *</label>
-              <select id="addDepartment" required>
-                <option value="" disabled selected>Select Department</option>
-                <option value="Engineering">Engineering</option>
-                <option value="Product">Product</option>
-                <option value="Human Resources">Human Resources</option>
-                <option value="Finance">Finance</option>
-                <option value="Marketing">Marketing</option>
-                <option value="Design">Design</option>
-                <option value="Operations">Operations</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="addSalary">Annual Salary ($) *</label>
-              <input type="number" id="addSalary" required step="0.01" min="0" placeholder="e.g. 85000">
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary modal-close-trigger">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Employee</button>
-        </div>
-      </form>
+      <button class="modal-submit-btn" onclick="addEmployee()">Save Employee Details</button>
     </div>
   </div>
 
-  <!-- 2. Edit Employee Modal -->
-  <div id="editModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3 id="editModalTitle">Edit Employee Record</h3>
-        <button class="modal-close-btn modal-close-trigger" aria-label="Close modal">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-      </div>
-      <form id="editEmployeeForm">
-        <input type="hidden" id="editId">
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="editName">Full Name *</label>
-            <input type="text" id="editName" required autocomplete="off">
+  <!-- Edit Employee Modal (PDF 3 Page 18) -->
+  <div id="editModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <h3 id="editModalTitle">Update Employee</h3>
+      <div class="form-grid">
+        <!-- First Column -->
+        <div class="form-group">
+          <input type="hidden" id="editId">
+          <div class="field-wrap">
+            <label for="editFirstName">First Name *</label>
+            <input type="text" id="editFirstName" placeholder="First Name" autocomplete="off">
           </div>
-          <div class="form-group">
-            <label for="editEmail">Email Address *</label>
-            <input type="email" id="editEmail" required autocomplete="off">
+          <div class="field-wrap">
+            <label for="editMiddleInitial">M.I.</label>
+            <input type="text" id="editMiddleInitial" placeholder="M.I." maxlength="1" oninput="this.value = this.value.toUpperCase()">
           </div>
-          <div class="form-group">
-            <label for="editPosition">Job Title / Position *</label>
-            <input type="text" id="editPosition" required autocomplete="off">
+          <div class="field-wrap">
+            <label for="editLastName">Last Name *</label>
+            <input type="text" id="editLastName" placeholder="Last Name" autocomplete="off">
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="editDepartment">Department *</label>
-              <select id="editDepartment" required>
-                <option value="Engineering">Engineering</option>
-                <option value="Product">Product</option>
-                <option value="Human Resources">Human Resources</option>
-                <option value="Finance">Finance</option>
-                <option value="Marketing">Marketing</option>
-                <option value="Design">Design</option>
-                <option value="Operations">Operations</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="editSalary">Annual Salary ($) *</label>
-              <input type="number" id="editSalary" required step="0.01" min="0">
-            </div>
+          <div class="field-wrap">
+            <label for="editMobileNumber">Mobile Number *</label>
+            <input type="text" id="editMobileNumber" placeholder="Mobile Number" autocomplete="off">
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary modal-close-trigger">Cancel</button>
-          <button type="submit" class="btn btn-primary">Update Employee</button>
+
+        <!-- Second Column -->
+        <div class="form-group">
+          <div class="field-wrap">
+            <label for="editEmail">Email *</label>
+            <input type="email" id="editEmail" placeholder="Email" autocomplete="off">
+          </div>
+          <div class="field-wrap">
+            <label for="editSex">Gender *</label>
+            <select id="editSex">
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+          </div>
+          <div class="field-wrap">
+            <label for="editJobTitle">Job Title *</label>
+            <select id="editJobTitle">
+              <option value="Select Job Title">Select Job Title</option>
+              <option value="Project Manager">Project Manager</option>
+              <option value="Business Analyst">Business Analyst</option>
+              <option value="Fullstack Software Engineer">Fullstack Software Engineer</option>
+              <option value="Front End Developer">Front End Developer</option>
+              <option value="Back End Developer">Back End Developer</option>
+              <option value="Quality Assurance Engineer">Quality Assurance Engineer</option>
+            </select>
+          </div>
         </div>
-      </form>
+      </div>
+      <button class="modal-submit-btn" onclick="updateEmployee()">Save Changes</button>
     </div>
   </div>
 
-  <!-- 3. View Employee Modal -->
-  <div id="viewModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="viewModalTitle">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3 id="viewModalTitle">Employee Profile</h3>
-        <button class="modal-close-btn modal-close-trigger" aria-label="Close modal">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
+  <!-- View Employee Details Modal (Triggered by Clicking Any Table Row) -->
+  <div id="viewModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="viewModalTitle">
+    <div class="modal-content view-modal-content">
+      <span class="close" onclick="closeViewModal()">&times;</span>
+      
+      <div class="view-modal-header">
+        <div class="view-avatar-badge" id="viewAvatarBadge">EM</div>
+        <div class="view-header-info">
+          <h3 id="viewModalTitle">Employee Profile</h3>
+          <span class="view-id-badge" id="viewBadgeId">ID #0</span>
+        </div>
       </div>
-      <div class="modal-body" id="viewDetailsContainer">
-        <!-- Injected by app.js -->
+
+      <div class="view-hero-card">
+        <div class="view-hero-name" id="viewFullName">--</div>
+        <div class="view-hero-role" id="viewJobBadge">--</div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary modal-close-trigger">Close</button>
+
+      <div class="view-details-grid">
+        <div class="view-detail-card">
+          <span class="view-detail-label">First Name</span>
+          <span class="view-detail-value" id="viewFirstName">--</span>
+        </div>
+        <div class="view-detail-card">
+          <span class="view-detail-label">Middle Initial</span>
+          <span class="view-detail-value" id="viewMiddleInitial">--</span>
+        </div>
+        <div class="view-detail-card">
+          <span class="view-detail-label">Last Name</span>
+          <span class="view-detail-value" id="viewLastName">--</span>
+        </div>
+        <div class="view-detail-card">
+          <span class="view-detail-label">Gender</span>
+          <span class="view-detail-value" id="viewSex">--</span>
+        </div>
+        <div class="view-detail-card full-span">
+          <span class="view-detail-label">Email Address</span>
+          <span class="view-detail-value" id="viewEmail">--</span>
+        </div>
+        <div class="view-detail-card full-span">
+          <span class="view-detail-label">Mobile Number</span>
+          <span class="view-detail-value" id="viewMobileNumber">--</span>
+        </div>
+      </div>
+
+      <div class="view-modal-actions">
+        <button type="button" class="btn-edit-from-view" onclick="editCurrentViewedEmployee()">Edit Employee</button>
+        <button type="button" class="btn-close-view" onclick="closeViewModal()">Close</button>
       </div>
     </div>
   </div>
 
-  <!-- 4. Delete Confirmation Modal -->
-  <div id="deleteModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
-    <div class="modal-card" style="max-width: 440px;">
-      <div class="modal-header">
-        <h3 id="deleteModalTitle" style="color: var(--danger);">Confirm Deletion</h3>
-        <button class="modal-close-btn modal-close-trigger" aria-label="Close modal">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
+  <!-- Delete Confirmation Modal (from GitHub repository) -->
+  <div id="deleteModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+    <div class="modal-content" style="max-width: 440px;">
+      <span class="close" onclick="closeDeleteModal()">&times;</span>
+      <h3 id="deleteModalTitle" style="color: var(--danger-red, #b02a37);">Confirm Deletion</h3>
+      <div style="padding: 10px 0 20px;">
+        <p style="margin-bottom: 12px; font-size: 15px; color: #231f20;">Are you sure you want to delete employee <strong id="deleteEmployeeName">this employee</strong>?</p>
+        <p style="font-size: 13px; color: var(--text-muted, #6c6364); margin: 0;">This action will execute a <code>DELETE</code> query against the MySQL database and cannot be undone.</p>
       </div>
-      <div class="modal-body">
-        <p style="margin-bottom: 12px;">Are you sure you want to delete employee <strong id="deleteEmployeeName">--</strong>?</p>
-        <p style="font-size: 13px; color: var(--text-muted);">This action will execute a <code>DELETE</code> query against the MySQL database and cannot be undone.</p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary modal-close-trigger">Cancel</button>
-        <button type="button" id="confirmDeleteBtn" class="btn btn-danger">Delete Employee</button>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 14px; border-top: 1px solid var(--border-light);">
+        <button type="button" class="btn-close-view" style="padding: 8px 16px;" onclick="closeDeleteModal()">Cancel</button>
+        <button type="button" id="confirmDeleteBtn" class="delete-btn" style="padding: 8px 18px; font-size: 13.5px;" onclick="handleConfirmDelete()">Delete Employee</button>
       </div>
     </div>
   </div>
 
-  <!-- Core JavaScript -->
-  <script src="script.js"></script>
+  <!-- JavaScript for API Calls (PDF 3 Page 10) -->
+  <script src="<?= $empJsPath ?>?v=<?= time() ?>"></script>
 </body>
 </html>

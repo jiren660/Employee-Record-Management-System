@@ -1,16 +1,17 @@
 <?php
 /**
  * Database Connection Class
- * Handles PDO connection to MySQL database with automatic credential fallback.
+ * Western Mindanao State University - College of Computing Studies
+ * Handles PDO connection to MySQL database with automatic credential and DB name fallback.
  */
 if (!class_exists('Database')) {
     class Database {
         private $host = "localhost";
-        private $db_name = "employee_db";
+        private $db_name = "test_connection_db";
         private $username = "root";
-        private $password = ""; // Default XAMPP MySQL password
+        private $password = "";
         private $port = "3306";
-        private $conn = null;
+        public $conn = null;
 
         /**
          * Establish and return the PDO database connection
@@ -20,41 +21,49 @@ if (!class_exists('Database')) {
         public function getConnection() {
             $this->conn = null;
 
-            // Try standard XAMPP blank password first, with fallback to 123456
+            // Supported database names and passwords (test_connection_db as primary)
+            $databases = ["test_connection_db", "employee_db", "test_db"];
             $passwords = ["", "123456"];
             $lastException = null;
 
-            foreach ($passwords as $pwd) {
-                try {
-                    $dsn = "mysql:host=" . $this->host . ";port=" . $this->port . ";dbname=" . $this->db_name . ";charset=utf8mb4";
-                    $this->conn = new PDO($dsn, $this->username, $pwd, [
-                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                        PDO::ATTR_EMULATE_PREPARES => false,
-                    ]);
-                    // If successful, update password property and return connection
-                    $this->password = $pwd;
-                    return $this->conn;
-                } catch (PDOException $e) {
-                    $lastException = $e;
+            foreach ($databases as $dbName) {
+                foreach ($passwords as $pwd) {
+                    try {
+                        $dsn = "mysql:host=" . $this->host . ";port=" . $this->port . ";dbname=" . $dbName . ";charset=utf8mb4";
+                        $this->conn = new PDO($dsn, $this->username, $pwd, [
+                            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                            PDO::ATTR_EMULATE_PREPARES => false,
+                        ]);
+                        $this->db_name = $dbName;
+                        $this->password = $pwd;
+                        return $this->conn;
+                    } catch (PDOException $e) {
+                        $lastException = $e;
+                    }
                 }
             }
 
-            // If all attempts failed, throw the exception
             if ($lastException) {
-                throw $lastException;
+                // If specific database doesn't exist, try connecting to MySQL server directly and creating it
+                try {
+                    $pdo = new PDO("mysql:host=" . $this->host . ";port=" . $this->port, $this->username, "");
+                    $pdo->exec("CREATE DATABASE IF NOT EXISTS `test_connection_db` DEFAULT CHARACTER SET utf8mb4");
+                    return $this->getConnection();
+                } catch (Exception $ex) {
+                    // Output error if completely unreachable
+                }
             }
 
             return null;
         }
 
-        /**
-         * Alias for getConnection()
-         *
-         * @return PDO|null
-         */
         public function connect() {
             return $this->getConnection();
+        }
+
+        public function getDbName() {
+            return $this->db_name;
         }
     }
 }

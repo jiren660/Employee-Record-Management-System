@@ -1,176 +1,122 @@
 {
   "info": {
-    "_postman_id": "8f6c4a12-9b24-4e4b-971a-e64e528df529",
-    "name": "Employee Management Web Application API",
-    "description": "ADS133 Hands-on Activity: Complete RESTful API for Employee Management System using PHP and MySQL. Endpoints for GET, POST, PUT, and DELETE operations.",
+    "_postman_id": "c1f7a294-81d3-4679-b1d5-881b29a282cc",
+    "name": "Employee Management API - ADS133",
+    "description": "Complete Postman Collection for Testing Employee RESTful API Endpoints matching WMSU CCS Activity PDF 2 and PDF 4 specifications.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "0. Test Database Connection",
+      "name": "1. Database Connection Status",
       "request": {
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost/employee_management/test_connection.php",
+          "raw": "http://localhost/ADS133/api/test_connection.php",
           "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "path": [
-            "employee_management",
-            "test_connection.php"
-          ]
-        },
-        "description": "Verifies that the PDO MySQL database connection is established and returns a successful JSON status."
+          "host": ["localhost"],
+          "path": ["ADS133", "api", "test_connection.php"]
+        }
       },
       "response": []
     },
     {
-      "name": "1. GET - Retrieve All Employees",
+      "name": "2. Get All Employees",
       "request": {
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost/employee_management/employee_api.php",
+          "raw": "http://localhost/ADS133/api/employee_api.php",
           "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "path": [
-            "employee_management",
-            "employee_api.php"
-          ]
-        },
-        "description": "Fetches the complete directory of employees ordered by ID descending."
+          "host": ["localhost"],
+          "path": ["ADS133", "api", "employee_api.php"]
+        }
       },
       "response": []
     },
     {
-      "name": "2. GET - Retrieve One Employee by ID",
+      "name": "3. Get Employee By ID",
       "request": {
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost/employee_management/employee_api.php?id=1",
+          "raw": "http://localhost/ADS133/api/employee_api.php?id=1",
           "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "path": [
-            "employee_management",
-            "employee_api.php"
-          ],
+          "host": ["localhost"],
+          "path": ["ADS133", "api", "employee_api.php"],
           "query": [
             {
               "key": "id",
               "value": "1"
             }
           ]
-        },
-        "description": "Retrieves the full record of a single employee matching the query parameter id."
+        }
       },
       "response": []
     },
     {
-      "name": "3. POST - Add New Employee",
+      "name": "4. Add New Employee (POST)",
       "request": {
         "method": "POST",
         "header": [
           {
             "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
+            "value": "application/json"
           }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"Juan Dela Cruz\",\n  \"email\": \"juan@example.com\",\n  \"position\": \"Software Developer\",\n  \"salary\": 35000\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
+          "raw": "{\n  \"first_name\": \"Alice\",\n  \"middle_initial\": \"M\",\n  \"last_name\": \"Brown\",\n  \"mobile_number\": \"09987654321\",\n  \"email\": \"alice.postman@example.com\",\n  \"sex\": \"Female\",\n  \"job_title\": \"Fullstack Software Engineer\"\n}"
         },
         "url": {
-          "raw": "http://localhost/employee_management/employee_api.php",
+          "raw": "http://localhost/ADS133/api/employee_api.php",
           "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "path": [
-            "employee_management",
-            "employee_api.php"
-          ]
-        },
-        "description": "Creates a new employee record using a raw JSON payload with Content-Type: application/json."
+          "host": ["localhost"],
+          "path": ["ADS133", "api", "employee_api.php"]
+        }
       },
       "response": []
     },
     {
-      "name": "4. PUT - Update Existing Employee",
+      "name": "5. Update Employee (PUT)",
       "request": {
         "method": "PUT",
         "header": [
           {
             "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
+            "value": "application/json"
           }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"id\": 1,\n  \"name\": \"Juan Dela Cruz\",\n  \"email\": \"juan.updated@example.com\",\n  \"position\": \"Senior Developer\",\n  \"salary\": 45000\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
+          "raw": "{\n  \"id\": 1,\n  \"first_name\": \"John\",\n  \"middle_initial\": \"A\",\n  \"last_name\": \"Doe\",\n  \"mobile_number\": \"1122334455\",\n  \"email\": \"john.doe@example.com\",\n  \"sex\": \"Male\",\n  \"job_title\": \"Project Manager\"\n}"
         },
         "url": {
-          "raw": "http://localhost/employee_management/employee_api.php",
+          "raw": "http://localhost/ADS133/api/employee_api.php",
           "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "path": [
-            "employee_management",
-            "employee_api.php"
-          ]
-        },
-        "description": "Updates an existing employee record by ID with a raw JSON payload."
+          "host": ["localhost"],
+          "path": ["ADS133", "api", "employee_api.php"]
+        }
       },
       "response": []
     },
     {
-      "name": "5. DELETE - Delete Employee",
+      "name": "6. Delete Employee (DELETE)",
       "request": {
         "method": "DELETE",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
+        "header": [],
         "url": {
-          "raw": "http://localhost/employee_management/employee_api.php?id=1",
+          "raw": "http://localhost/ADS133/api/employee_api.php?id=1",
           "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "path": [
-            "employee_management",
-            "employee_api.php"
-          ],
+          "host": ["localhost"],
+          "path": ["ADS133", "api", "employee_api.php"],
           "query": [
             {
               "key": "id",
               "value": "1"
             }
           ]
-        },
-        "description": "Removes an employee record from the database by ID."
+        }
       },
       "response": []
     }

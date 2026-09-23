@@ -1,55 +1,58 @@
 <?php
 /**
- * Database Connection Test Endpoint
- * Pings MySQL database via PDO and returns connection status JSON.
+ * API Endpoint for Checking Database Connection Status
+ * Western Mindanao State University - College of Computing Studies
+ * Reference: 01-PHP-MySQL-Database-Connection.pdf (Pages 6, 7)
  */
-error_reporting(E_ALL);
-ini_set('display_errors', '0');
-
-header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
+header("Access-Control-Allow-Origin: *");
 
-if (file_exists(__DIR__ . '/database.php')) {
-    require_once __DIR__ . '/database.php';
-} elseif (file_exists(__DIR__ . '/config/database.php')) {
-    require_once __DIR__ . '/config/database.php';
-}
-
-try {
-    $database = new Database();
-    $db = $database->getConnection();
-    
-    if ($db) {
-        $stmt = $db->query("SELECT COUNT(*) AS total FROM employees");
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $totalEmployees = $row ? intval($row['total']) : 0;
-        
-        $serverVersion = $db->getAttribute(PDO::ATTR_SERVER_VERSION);
-
-        http_response_code(200);
-        echo json_encode([
-            "success" => true,
-            "status" => "success",
-            "message" => "Database connection successful",
-            "database" => "employee_db",
-            "server_version" => $serverVersion,
-            "table_verified" => "employees",
-            "total_employees" => $totalEmployees,
-            "timestamp" => date("Y-m-d H:i:s")
-        ]);
-    } else {
-        http_response_code(500);
-        echo json_encode([
-            "success" => false,
-            "status" => "error",
-            "message" => "Failed to establish PDO connection."
-        ]);
+$dbPaths = [
+    __DIR__ . '/database.php',
+    __DIR__ . '/../api/database.php',
+    __DIR__ . '/../config/database.php'
+];
+foreach ($dbPaths as $p) {
+    if (file_exists($p)) {
+        require_once $p;
+        break;
     }
-} catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode([
-        "success" => false,
-        "status" => "error",
-        "message" => "Database connection exception: " . $e->getMessage()
-    ]);
 }
+
+$testPaths = [
+    __DIR__ . '/../class/DbTest.php',
+    __DIR__ . '/class/DbTest.php',
+    __DIR__ . '/DbTest.php'
+];
+foreach ($testPaths as $p) {
+    if (file_exists($p)) {
+        require_once $p;
+        break;
+    }
+}
+
+$database = new Database();
+$db = $database->getConnection();
+
+if ($db) {
+    $test = new DbTest($db);
+    $response = $test->checkConnection();
+
+    // Enrich with server version & table verification
+    try {
+        $version = $db->query('SELECT VERSION()')->fetchColumn();
+        $count = $db->query('SELECT COUNT(*) FROM employees')->fetchColumn();
+        $response['database'] = $database->getDbName();
+        $response['server_version'] = $version;
+        $response['total_employees'] = intval($count);
+    } catch (Exception $e) {
+        // Table may not yet be initialized
+    }
+} else {
+    $response = [
+        "status" => "error",
+        "message" => "Failed to connect to database"
+    ];
+}
+
+echo json_encode($response);

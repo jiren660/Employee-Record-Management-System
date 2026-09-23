@@ -1,777 +1,774 @@
 /**
- * ==============================================================================
- * EMPLOYEE MANAGEMENT SYSTEM - VANILLA JAVASCRIPT CONTROLLER
- * Pure Vanilla JS utilizing Fetch API for asynchronous RESTful CRUD operations
- * ==============================================================================
+ * JavaScript for Employee CRUD & API Interactions
+ * Western Mindanao State University - College of Computing Studies
+ * Reference: 03-Simple-Web-Application-Development-with-API-implementation.pdf (Pages 10, 13, 16, 19, 21)
+ * Includes GitHub-style Delete Confirmation Modal (deletePrompt & handleConfirmDelete)
  */
 
-// Application State
-const AppState = {
-  employees: [],
-  filteredEmployees: [],
-  selectedEmployeeId: null,
-  deleteTargetId: null,
-  apiEndpoint: 'employee_api.php',
-  connectionEndpoint: 'test_connection.php'
-};
+// Determine API endpoint dynamically and robustly across all URL cases
+const API_URL = (function() {
+  const path = window.location.pathname.toLowerCase();
+  if (path.includes('/ads133')) {
+    const match = window.location.pathname.match(/\/ads133/i);
+    const prefix = match ? window.location.pathname.substring(0, match.index + match[0].length) : '/ADS133';
+    return prefix + '/api/employee_api.php';
+  }
+  return '../api/employee_api.php';
+})();
 
-// DOM Elements Cache
-const DOM = {};
+const TEST_CONN_URL = (function() {
+  const path = window.location.pathname.toLowerCase();
+  if (path.includes('/ads133')) {
+    const match = window.location.pathname.match(/\/ads133/i);
+    const prefix = match ? window.location.pathname.substring(0, match.index + match[0].length) : '/ADS133';
+    return prefix + '/api/test_connection.php';
+  }
+  return '../api/test_connection.php';
+})();
 
-/**
- * Initialize Application on DOMContentLoaded
- */
-document.addEventListener('DOMContentLoaded', () => {
-  cacheDOMElements();
-  bindEvents();
-  checkConnection();
+// Currently viewed employee in details modal
+let currentViewedEmployee = null;
+
+// Delete Target ID Tracker (from GitHub repository)
+let deleteTargetId = null;
+
+// Initialize on DOM Ready
+document.addEventListener("DOMContentLoaded", () => {
   loadEmployees();
+  checkConnectionStatus(false);
+  setupEventListeners();
 });
 
 /**
- * Cache necessary DOM references for performance
+ * Check Database Connection Status
  */
-function cacheDOMElements() {
-  DOM.employeeTableBody = document.getElementById('employeeTableBody');
-  DOM.emptyState = document.getElementById('emptyState');
-  DOM.tableCard = document.getElementById('tableCard');
-  DOM.searchInput = document.getElementById('searchInput');
-  DOM.deptFilter = document.getElementById('deptFilter');
-  DOM.sortFilter = document.getElementById('sortFilter');
-  DOM.refreshBtn = document.getElementById('refreshBtn');
-  DOM.tableCounter = document.getElementById('tableCounter');
+async function checkConnectionStatus(interactive = false) {
+  const statusSpan = document.getElementById("connectionStatus");
+  const testBtn = document.getElementById("testConnectionBtn");
 
-  // Stats
-  DOM.statTotalCount = document.getElementById('statTotalCount');
-  DOM.statTotalPayroll = document.getElementById('statTotalPayroll');
-  DOM.statAvgSalary = document.getElementById('statAvgSalary');
-  DOM.statTotalDepts = document.getElementById('statTotalDepts');
-
-  // Modals
-  DOM.addModal = document.getElementById('addModal');
-  DOM.editModal = document.getElementById('editModal');
-  DOM.viewModal = document.getElementById('viewModal');
-  DOM.deleteModal = document.getElementById('deleteModal');
-
-  // Forms
-  DOM.addForm = document.getElementById('addEmployeeForm');
-  DOM.editForm = document.getElementById('editEmployeeForm');
-  DOM.inlineForm = document.getElementById('inlineEmployeeForm');
-  DOM.inlineId = document.getElementById('inlineId');
-  DOM.inlineName = document.getElementById('inlineName');
-  DOM.inlineEmail = document.getElementById('inlineEmail');
-  DOM.inlinePosition = document.getElementById('inlinePosition');
-  DOM.inlineDepartment = document.getElementById('inlineDepartment');
-  DOM.inlineSalary = document.getElementById('inlineSalary');
-  DOM.inlineSubmitBtn = document.getElementById('inlineSubmitBtn');
-  DOM.inlineCancelBtn = document.getElementById('inlineCancelBtn');
-  DOM.formTitle = document.getElementById('formTitle');
-
-  // Buttons & Badges
-  DOM.openAddBtn = document.getElementById('openAddBtn');
-  DOM.tableAddBtn = document.getElementById('tableAddBtn');
-  DOM.testConnectionBtn = document.getElementById('testConnectionBtn');
-  DOM.confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
-  DOM.connectionPill = document.getElementById('connectionPill');
-  DOM.toastContainer = document.getElementById('toastContainer');
-}
-
-/**
- * Bind User Interactions & Event Handlers
- */
-function bindEvents() {
-  // Search & Filter (if present)
-  if (DOM.searchInput) {
-    let searchTimeout = null;
-    DOM.searchInput.addEventListener('input', (e) => {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => {
-        applyFilters();
-      }, 200);
-    });
+  if (testBtn) {
+    testBtn.disabled = true;
+    testBtn.textContent = "Testing...";
   }
 
-  if (DOM.deptFilter) {
-    DOM.deptFilter.addEventListener('change', applyFilters);
-  }
-  if (DOM.sortFilter) {
-    DOM.sortFilter.addEventListener('change', applyFilters);
-  }
-  if (DOM.refreshBtn) {
-    DOM.refreshBtn.addEventListener('click', () => {
-      loadEmployees();
-      showToast('info', 'Refreshed', 'Employee records reloaded from server.');
-    });
-  }
-
-  // Modal Open / Close
-  if (DOM.openAddBtn) {
-    DOM.openAddBtn.addEventListener('click', () => openModal(DOM.addModal));
-  }
-  if (DOM.tableAddBtn) {
-    DOM.tableAddBtn.addEventListener('click', () => openModal(DOM.addModal));
-  }
-  if (DOM.testConnectionBtn) {
-    DOM.testConnectionBtn.addEventListener('click', runConnectionTest);
-  }
-  if (DOM.confirmDeleteBtn) {
-    DOM.confirmDeleteBtn.addEventListener('click', handleConfirmDelete);
-  }
-
-  // Close buttons inside modals
-  document.querySelectorAll('.modal-close-trigger').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      closeAllModals();
-    });
-  });
-
-  // Click outside modal card to dismiss
-  document.querySelectorAll('.modal-overlay').forEach((overlay) => {
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
-        closeAllModals();
-      }
-    });
-  });
-
-  // Esc key closes any open modal
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closeAllModals();
-    }
-  });
-
-  // Form Submissions
-  if (DOM.addForm) {
-    DOM.addForm.addEventListener('submit', handleAddEmployee);
-  }
-  if (DOM.editForm) {
-    DOM.editForm.addEventListener('submit', handleEditEmployee);
-  }
-}
-
-/**
- * Check Database Connection Health
- */
-async function checkConnection() {
   try {
-    const res = await fetch(AppState.connectionEndpoint);
-    const result = await res.json();
-    if (result.status === 'success') {
-      DOM.connectionPill.innerHTML = `
-        <span class="status-dot"></span>
-        <span>MySQL Connected (v${result.server_version || '8.4'})</span>
-      `;
-    } else {
-      setConnectionFailed();
-    }
-  } catch (err) {
-    setConnectionFailed();
-  }
-}
-
-function setConnectionFailed() {
-  DOM.connectionPill.innerHTML = `
-    <span class="status-dot" style="background:#ef4444;box-shadow:0 0 8px #ef4444;"></span>
-    <span style="color:#ef4444;">DB Offline</span>
-  `;
-}
-
-/**
- * Trigger Interactive Connection Test with Feedback
- */
-async function runConnectionTest() {
-  showToast('info', 'Testing Connection', 'Pinging MySQL database via PDO...');
-  try {
-    const res = await fetch(AppState.connectionEndpoint);
+    const res = await fetch(TEST_CONN_URL + "?t=" + new Date().getTime());
     const data = await res.json();
 
-    if (res.ok && data.status === 'success') {
-      showToast(
-        'success',
-        'Connection Successful',
-        `Database: ${data.database} | Total Employees: ${data.total_employees} | Engine: MySQL ${data.server_version}`
-      );
+    if (res.ok && data.status === "success") {
+      if (statusSpan) {
+        statusSpan.textContent = "Database Connected Successfully";
+        statusSpan.className = "status success";
+      }
+
+      if (interactive) {
+        alert(
+          `Database Connection Status: SUCCESS!\n\n` +
+          `Database: ${data.database || 'test_connection_db'}\n` +
+          `Server Version: ${data.server_version || 'MariaDB/MySQL'}\n` +
+          `Total Employees: ${data.total_employees ?? 'N/A'}`
+        );
+        showToast("success", "Database Connected", `Connected to ${data.database || 'MySQL database'}.`);
+      }
     } else {
-      showToast('error', 'Connection Error', data.message || 'Unable to connect to database.');
+      if (statusSpan) {
+        statusSpan.textContent = "Database Connection Failed";
+        statusSpan.className = "status error";
+      }
+      if (interactive) {
+        alert(
+          `Database Connection Status: FAILED\n\n` +
+          `Error: ${data.message || 'Could not connect to database.'}`
+        );
+        showToast("error", "Database Disconnected", data.message || "Could not connect to database.");
+      }
     }
   } catch (err) {
-    showToast('error', 'Network Error', 'Failed to reach connection endpoint.');
-  }
-}
-
-/**
- * Fetch All Employees via REST API (GET)
- */
-async function loadEmployees() {
-  try {
-    const res = await fetch(AppState.apiEndpoint);
-    const result = await res.json();
-
-    if (res.ok && result.status === 'success') {
-      AppState.employees = result.data || [];
-      populateDepartmentDropdown();
-      applyFilters();
-      updateMetrics();
-    } else {
-      showToast('error', 'Fetch Error', result.message || 'Failed to load employee records.');
+    console.error("Database connection check failed:", err);
+    if (statusSpan) {
+      statusSpan.textContent = "Database Connection Failed";
+      statusSpan.className = "status error";
     }
-  } catch (err) {
-    showToast('error', 'Network Error', 'Could not communicate with REST API.');
-  }
-}
-
-/**
- * Dynamically Populate Department Dropdown
- */
-function populateDepartmentDropdown() {
-  if (!DOM.deptFilter) return;
-  const departments = [...new Set(AppState.employees.map((emp) => emp.department))].filter(Boolean).sort();
-  const currentVal = DOM.deptFilter.value;
-
-  DOM.deptFilter.innerHTML = '<option value="All">All Departments</option>';
-  departments.forEach((dept) => {
-    const option = document.createElement('option');
-    option.value = dept;
-    option.textContent = dept;
-    DOM.deptFilter.appendChild(option);
-  });
-
-  if (departments.includes(currentVal)) {
-    DOM.deptFilter.value = currentVal;
-  }
-}
-
-/**
- * Apply Search, Filter, and Sort Client-Side
- */
-function applyFilters() {
-  if (!DOM.searchInput || !DOM.deptFilter || !DOM.sortFilter) {
-    AppState.filteredEmployees = AppState.employees;
-    renderTable(AppState.employees);
-    return;
-  }
-  const searchTerm = DOM.searchInput.value.toLowerCase().trim();
-  const selectedDept = DOM.deptFilter.value;
-  const sortMode = DOM.sortFilter.value;
-
-  let filtered = AppState.employees.filter((emp) => {
-    const matchesSearch =
-      !searchTerm ||
-      emp.name.toLowerCase().includes(searchTerm) ||
-      emp.email.toLowerCase().includes(searchTerm) ||
-      emp.position.toLowerCase().includes(searchTerm) ||
-      emp.department.toLowerCase().includes(searchTerm);
-
-    const matchesDept = selectedDept === 'All' || emp.department === selectedDept;
-
-    return matchesSearch && matchesDept;
-  });
-
-  // Sorting
-  filtered.sort((a, b) => {
-    switch (sortMode) {
-      case 'id_desc':
-        return Number(b.id) - Number(a.id);
-      case 'id_asc':
-        return Number(a.id) - Number(b.id);
-      case 'name_asc':
-        return a.name.localeCompare(b.name);
-      case 'name_desc':
-        return b.name.localeCompare(a.name);
-      case 'salary_desc':
-        return Number(b.salary) - Number(a.salary);
-      case 'salary_asc':
-        return Number(a.salary) - Number(b.salary);
-      default:
-        return Number(b.id) - Number(a.id);
+    if (interactive) {
+      alert("Database Connection Status: FAILED\nCould not reach test_connection.php endpoint.");
     }
-  });
-
-  AppState.filteredEmployees = filtered;
-  renderTable(filtered);
+  } finally {
+    if (testBtn) {
+      testBtn.disabled = false;
+      testBtn.textContent = "Test DB";
+    }
+  }
 }
 
 /**
- * Render Employee Table Rows
+ * Interactive DB Connection Test Button Handler
  */
-function renderTable(employees) {
-  DOM.tableCounter.textContent = `${employees.length} Employee${employees.length === 1 ? '' : 's'}`;
+function runConnectionTest() {
+  checkConnectionStatus(true);
+}
 
-  if (employees.length === 0) {
-    DOM.employeeTableBody.innerHTML = '';
-    DOM.emptyState.style.display = 'block';
-    return;
-  }
+/**
+ * Fetch all employees and display them in the table (PDF 3 Page 13)
+ * Clicking any table row opens the View Employee Profile Modal
+ */
+function loadEmployees() {
+  fetch(API_URL + "?t=" + new Date().getTime())
+    .then((response) => response.json())
+    .then((data) => {
+      const employeeTableBody = document.getElementById("employeeTableBody");
+      const recordCount = document.getElementById("recordCount");
+      const emptyState = document.getElementById("emptyState");
 
-  DOM.emptyState.style.display = 'none';
+      if (!employeeTableBody) return;
+      employeeTableBody.innerHTML = "";
 
-  const rowsHtml = employees
-    .map((emp) => {
-      const initials = getInitials(emp.name);
-      const deptClass = getDeptClass(emp.department);
-      const formattedSalary = formatCurrency(emp.salary);
+      const employees = data.employee || data.data || [];
 
-      return `
-      <tr onclick="handleRowClick(event, ${emp.id})" title="Click row to view profile modal">
-        <td class="td-id">#${escapeHtml(emp.id)}</td>
-        <td>
-          <div class="user-cell">
-            <div class="avatar">${initials}</div>
-            <div class="user-cell-meta">
-              <div class="user-name">${escapeHtml(emp.name)}</div>
-              <div class="user-email">${escapeHtml(emp.email)}</div>
-            </div>
-          </div>
-        </td>
-        <td><span class="cell-position">${escapeHtml(emp.position)}</span></td>
-        <td>
-          <span class="badge-dept ${deptClass}">${escapeHtml(emp.department)}</span>
-        </td>
-        <td>
-          <span class="salary-text">${formattedSalary}</span>
-        </td>
-        <td>
-          <div class="actions-cell">
-            <button class="btn-action-edit" onclick="editEmployee(${emp.id})">Edit</button>
-            <button class="btn-action-delete" onclick="deletePrompt(${emp.id}, '${escapeQuote(emp.name)}')">Delete</button>
-          </div>
-        </td>
-      </tr>
-    `;
+      if (recordCount) {
+        recordCount.textContent = `${employees.length} Employee${employees.length === 1 ? '' : 's'}`;
+      }
+
+      if (data.status === "success" && employees.length > 0) {
+        if (emptyState) emptyState.style.display = "none";
+
+        employees.forEach((emp) => {
+          const midInitial = emp.middle_initial ? escapeHtml(emp.middle_initial) : "";
+          const fullName = `${escapeQuote(emp.first_name)} ${escapeQuote(emp.last_name)}`.trim();
+          const row = `
+            <tr class="employee-row" data-id="${emp.id}" onclick="viewEmployee(${emp.id})" title="Click row to view details">
+              <td class="text-center">${escapeHtml(emp.id)}</td>
+              <td><strong>${escapeHtml(emp.first_name)}</strong></td>
+              <td class="text-center">${midInitial}</td>
+              <td><strong>${escapeHtml(emp.last_name)}</strong></td>
+              <td>${escapeHtml(emp.mobile_number)}</td>
+              <td>${escapeHtml(emp.email)}</td>
+              <td class="text-center">${escapeHtml(emp.sex)}</td>
+              <td>${escapeHtml(emp.job_title)}</td>
+              <td class="actions" onclick="event.stopPropagation()">
+                <button type="button" class="edit-btn" onclick="event.stopPropagation(); openEditModal(${emp.id}, '${escapeQuote(emp.first_name)}', '${escapeQuote(emp.middle_initial || '')}', '${escapeQuote(emp.last_name)}', '${escapeQuote(emp.email)}', '${escapeQuote(emp.mobile_number)}', '${escapeQuote(emp.sex)}', '${escapeQuote(emp.job_title)}')">Edit</button>
+                <button type="button" class="delete-btn" onclick="event.stopPropagation(); deletePrompt(${emp.id}, '${fullName}')">Delete</button>
+              </td>
+            </tr>
+          `;
+          employeeTableBody.innerHTML += row;
+        });
+      } else {
+        if (emptyState) emptyState.style.display = "block";
+      }
     })
-    .join('');
-
-  DOM.employeeTableBody.innerHTML = rowsHtml;
-}
-
-/**
- * Handle Row Click to Open View Profile Modal
- */
-function handleRowClick(event, id) {
-  if (event.target.closest('.btn-action-edit') || event.target.closest('.btn-action-delete')) {
-    return;
-  }
-  viewEmployee(id);
-}
-
-/**
- * Compute and Update Key Metric Cards
- */
-function updateMetrics() {
-  if (!DOM.statTotalCount) return;
-  const total = AppState.employees.length;
-  DOM.statTotalCount.textContent = total;
-
-  if (total === 0) {
-    DOM.statTotalPayroll.textContent = '$0.00';
-    DOM.statAvgSalary.textContent = '$0.00';
-    DOM.statTotalDepts.textContent = '0';
-    return;
-  }
-
-  const payroll = AppState.employees.reduce((acc, curr) => acc + Number(curr.salary || 0), 0);
-  const avg = payroll / total;
-  const depts = new Set(AppState.employees.map((e) => e.department)).size;
-
-  DOM.statTotalPayroll.textContent = formatCurrency(payroll);
-  DOM.statAvgSalary.textContent = formatCurrency(avg);
-  DOM.statTotalDepts.textContent = depts;
-}
-
-/**
- * Handle Add Employee Form Submission (POST)
- */
-async function handleAddEmployee(e) {
-  e.preventDefault();
-
-  const formData = {
-    name: document.getElementById('addName').value.trim(),
-    email: document.getElementById('addEmail').value.trim(),
-    position: document.getElementById('addPosition').value.trim(),
-    department: document.getElementById('addDepartment').value.trim(),
-    salary: parseFloat(document.getElementById('addSalary').value)
-  };
-
-  if (!formData.name || !formData.email || !formData.position || !formData.department || isNaN(formData.salary)) {
-    showToast('error', 'Validation Error', 'All fields are required and salary must be numeric.');
-    return;
-  }
-
-  const submitBtn = DOM.addForm.querySelector('button[type="submit"]');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Saving...';
-
-  try {
-    const res = await fetch(AppState.apiEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData)
+    .catch((error) => {
+      console.error("Error fetching employees:", error);
+      showToast("error", "Network Error", "Could not load employee records from server.");
     });
-
-    const result = await res.json();
-
-    if (res.status === 201 && result.status === 'success') {
-      showToast('success', 'Employee Created', `Successfully added "${formData.name}".`);
-      DOM.addForm.reset();
-      closeAllModals();
-      await loadEmployees();
-    } else {
-      showToast('error', 'Error Creating Employee', result.message || 'Failed to save record.');
-    }
-  } catch (err) {
-    showToast('error', 'Request Failed', 'Network communication error.');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Save Employee';
-  }
 }
 
 /**
- * Fetch and Populate Edit Modal (GET ?id=X)
- */
-async function editEmployee(id) {
-  try {
-    const res = await fetch(`${AppState.apiEndpoint}?id=${id}`);
-    const result = await res.json();
-
-    if (res.ok && (result.success || result.status === 'success')) {
-      const emp = result.data;
-      // Populate and open edit modal popup
-      document.getElementById('editId').value = emp.id;
-      document.getElementById('editName').value = emp.name;
-      document.getElementById('editEmail').value = emp.email;
-      document.getElementById('editPosition').value = emp.position;
-      document.getElementById('editDepartment').value = emp.department || 'General';
-      document.getElementById('editSalary').value = emp.salary;
-
-      openModal(DOM.editModal);
-    } else {
-      showToast('error', 'Not Found', result.message || 'Employee details could not be found.');
-    }
-  } catch (err) {
-    showToast('error', 'Error', 'Failed to retrieve employee record.');
-  }
-}
-
-/**
- * Handle Edit Employee Form Submission (PUT)
- */
-async function handleEditEmployee(e) {
-  e.preventDefault();
-
-  const id = parseInt(document.getElementById('editId').value, 10);
-  const formData = {
-    id: id,
-    name: document.getElementById('editName').value.trim(),
-    email: document.getElementById('editEmail').value.trim(),
-    position: document.getElementById('editPosition').value.trim(),
-    department: document.getElementById('editDepartment').value.trim(),
-    salary: parseFloat(document.getElementById('editSalary').value)
-  };
-
-  if (!formData.name || !formData.email || !formData.position || !formData.department || isNaN(formData.salary)) {
-    showToast('error', 'Validation Error', 'All fields are required and salary must be numeric.');
-    return;
-  }
-
-  const submitBtn = DOM.editForm.querySelector('button[type="submit"]');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Updating...';
-
-  try {
-    const res = await fetch(AppState.apiEndpoint, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData)
-    });
-
-    const result = await res.json();
-
-    if (res.ok && result.status === 'success') {
-      showToast('success', 'Employee Updated', `Updated details for "${formData.name}".`);
-      closeAllModals();
-      await loadEmployees();
-    } else {
-      showToast('error', 'Update Failed', result.message || 'Could not update employee record.');
-    }
-  } catch (err) {
-    showToast('error', 'Request Failed', 'Network communication error.');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Update Employee';
-  }
-}
-
-/**
- * Fetch and Display Employee Details in View Modal (GET ?id=X)
- */
-async function viewEmployee(id) {
-  try {
-    const res = await fetch(`${AppState.apiEndpoint}?id=${id}`);
-    const result = await res.json();
-
-    if (res.ok && result.status === 'success') {
-      const emp = result.data;
-      const viewDetailsContainer = document.getElementById('viewDetailsContainer');
-
-      viewDetailsContainer.innerHTML = `
-        <div style="text-align:center;margin-bottom:20px;">
-          <div class="avatar" style="width:64px;height:64px;font-size:22px;margin:0 auto 12px;">${getInitials(emp.name)}</div>
-          <h3 style="font-size:20px;font-weight:700;">${escapeHtml(emp.name)}</h3>
-          <p style="color:var(--text-secondary);font-size:14px;">${escapeHtml(emp.position)}</p>
-        </div>
-        <div class="detail-list">
-          <div class="detail-item">
-            <span class="detail-label">Employee ID</span>
-            <span class="detail-value">#${escapeHtml(emp.id)}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">Email Address</span>
-            <span class="detail-value">${escapeHtml(emp.email)}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">Department</span>
-            <span class="detail-value"><span class="badge-dept ${getDeptClass(emp.department)}">${escapeHtml(emp.department)}</span></span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">Annual Salary</span>
-            <span class="detail-value" style="color:var(--success);font-weight:700;">${formatCurrency(emp.salary)}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">Date Added</span>
-            <span class="detail-value">${escapeHtml(emp.created_at || 'N/A')}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">Last Modified</span>
-            <span class="detail-value">${escapeHtml(emp.updated_at || 'N/A')}</span>
-          </div>
-        </div>
-      `;
-
-      openModal(DOM.viewModal);
-    } else {
-      showToast('error', 'Error', result.message || 'Record not found.');
-    }
-  } catch (err) {
-    showToast('error', 'Error', 'Failed to retrieve employee details.');
-  }
-}
-
-/**
- * Open Delete Confirmation Modal
+ * Open Delete Confirmation Modal (from GitHub repository)
  */
 function deletePrompt(id, name) {
-  AppState.deleteTargetId = id;
-  document.getElementById('deleteEmployeeName').textContent = name;
-  openModal(DOM.deleteModal);
+  deleteTargetId = id;
+  const nameEl = document.getElementById("deleteEmployeeName");
+  if (nameEl) {
+    nameEl.textContent = name ? `"${name}" (ID #${id})` : `ID #${id}`;
+  }
+  const modal = document.getElementById("deleteModal");
+  if (modal) {
+    modal.style.display = "flex";
+  } else {
+    // Fallback to browser confirm if modal is not present
+    if (confirm("Are you sure you want to delete this employee?")) {
+      handleConfirmDelete();
+    }
+  }
+}
+
+function closeDeleteModal() {
+  const modal = document.getElementById("deleteModal");
+  if (modal) modal.style.display = "none";
+  deleteTargetId = null;
 }
 
 /**
- * Confirm and Execute Employee Deletion (DELETE ?id=X)
+ * Confirm and Execute Employee Deletion (DELETE ?id=X) (from GitHub repository)
  */
 async function handleConfirmDelete() {
-  if (!AppState.deleteTargetId) return;
+  if (!deleteTargetId) return;
 
-  const btn = document.getElementById('confirmDeleteBtn');
-  btn.disabled = true;
-  btn.textContent = 'Deleting...';
+  const btn = document.getElementById("confirmDeleteBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Deleting...";
+  }
+
+  const idToDelete = deleteTargetId;
 
   try {
-    const res = await fetch(`${AppState.apiEndpoint}?id=${AppState.deleteTargetId}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' }
+    const res = await fetch(`${API_URL}?id=${encodeURIComponent(idToDelete)}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: idToDelete })
     });
 
     const result = await res.json();
 
-    if (res.ok && result.status === 'success') {
-      showToast('success', 'Employee Deleted', result.message || 'Employee record has been removed.');
-      closeAllModals();
+    if (res.ok && result.status === "success") {
+      alert(result.message || "Employee deleted successfully!");
+      showToast("success", "Employee Deleted", result.message || "Employee record has been removed.");
+      closeDeleteModal();
       await loadEmployees();
     } else {
-      showToast('error', 'Delete Failed', result.message || 'Could not delete employee record.');
+      alert("Delete Failed: " + (result.message || "Could not delete employee record."));
+      showToast("error", "Delete Failed", result.message || "Could not delete employee record.");
     }
   } catch (err) {
-    showToast('error', 'Request Failed', 'Network communication error.');
+    console.warn("DELETE request failed, attempting fallback:", err);
+    try {
+      const fallbackRes = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: idToDelete, _method: "DELETE" })
+      });
+      const result = await fallbackRes.json();
+      if (result.status === "success") {
+        alert(result.message || "Employee deleted successfully!");
+        showToast("success", "Employee Deleted", result.message || "Employee record has been removed.");
+        closeDeleteModal();
+        await loadEmployees();
+      } else {
+        alert("Delete Failed: " + (result.message || "Could not delete employee record."));
+      }
+    } catch (fallbackErr) {
+      console.error("Delete failed completely:", fallbackErr);
+      alert("Network Error: Could not communicate with server.");
+      showToast("error", "Request Failed", "Network communication error.");
+    }
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Delete Employee';
-    AppState.deleteTargetId = null;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Delete Employee";
+    }
+    deleteTargetId = null;
   }
 }
 
 /**
- * Modal Visibility Helpers
+ * Delete Employee function supporting both direct calling and opening deletePrompt
  */
-function openModal(modalEl) {
-  closeAllModals();
-  modalEl.classList.add('active');
-  const firstInput = modalEl.querySelector('input:not([type="hidden"]), select');
-  if (firstInput) {
-    setTimeout(() => firstInput.focus(), 100);
+function deleteEmployee(id, employeeName) {
+  deletePrompt(id, employeeName);
+}
+
+/**
+ * View Employee Profile Modal (Triggered by Clicking a Table Row)
+ */
+function viewEmployee(id) {
+  const modal = document.getElementById("viewModal");
+  if (!modal) return;
+
+  // Placeholder state while loading
+  document.getElementById("viewBadgeId").textContent = `ID #${id}`;
+  document.getElementById("viewAvatarBadge").textContent = "...";
+  document.getElementById("viewFullName").textContent = "Loading employee details...";
+  document.getElementById("viewJobBadge").textContent = "...";
+  document.getElementById("viewFirstName").textContent = "...";
+  document.getElementById("viewMiddleInitial").textContent = "...";
+  document.getElementById("viewLastName").textContent = "...";
+  document.getElementById("viewSex").textContent = "...";
+  document.getElementById("viewEmail").textContent = "...";
+  document.getElementById("viewMobileNumber").textContent = "...";
+
+  modal.style.display = "flex";
+
+  fetch(`${API_URL}?id=${id}&t=${new Date().getTime()}`)
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.status === "success" && (data.employee || data.data)) {
+        const emp = data.employee || data.data;
+        currentViewedEmployee = emp;
+
+        const initials = `${emp.first_name.charAt(0)}${emp.last_name.charAt(0)}`.toUpperCase();
+        document.getElementById("viewAvatarBadge").textContent = initials || "EM";
+        document.getElementById("viewBadgeId").textContent = `ID #${emp.id}`;
+        document.getElementById("viewFullName").textContent = `${emp.first_name} ${emp.middle_initial ? emp.middle_initial + '. ' : ''}${emp.last_name}`;
+        document.getElementById("viewJobBadge").textContent = emp.job_title;
+
+        document.getElementById("viewFirstName").textContent = emp.first_name;
+        document.getElementById("viewMiddleInitial").textContent = emp.middle_initial || "-";
+        document.getElementById("viewLastName").textContent = emp.last_name;
+        document.getElementById("viewSex").textContent = emp.sex;
+
+        const emailEl = document.getElementById("viewEmail");
+        emailEl.innerHTML = `<a href="mailto:${escapeHtml(emp.email)}" style="color: var(--primary-crimson); text-decoration: underline;">${escapeHtml(emp.email)}</a>`;
+
+        const mobileEl = document.getElementById("viewMobileNumber");
+        mobileEl.innerHTML = `<a href="tel:${escapeHtml(emp.mobile_number)}" style="color: var(--primary-crimson); text-decoration: underline;">${escapeHtml(emp.mobile_number)}</a>`;
+      } else {
+        alert("Could not load employee details: " + (data.message || "Record not found."));
+        closeViewModal();
+      }
+    })
+    .catch((error) => {
+      console.error("Error viewing employee:", error);
+      alert("Network Error: Could not retrieve employee record.");
+      closeViewModal();
+    });
+}
+
+function closeViewModal() {
+  const modal = document.getElementById("viewModal");
+  if (modal) modal.style.display = "none";
+  currentViewedEmployee = null;
+}
+
+function editCurrentViewedEmployee() {
+  if (!currentViewedEmployee) return;
+  const emp = currentViewedEmployee;
+  closeViewModal();
+  openEditModal(emp.id, emp.first_name, emp.middle_initial || '', emp.last_name, emp.email, emp.mobile_number, emp.sex, emp.job_title);
+}
+
+/**
+ * Search and Filter Data (PDF 3 Page 13)
+ */
+function filterEmployees() {
+  const searchInput = document.getElementById("searchBox");
+  const genderFilter = document.getElementById("genderFilter") || document.getElementById("filterSex");
+  const jobTitleFilter = document.getElementById("jobTitleFilter") || document.getElementById("filterJobTitle");
+
+  const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
+  const selectedGender = genderFilter ? genderFilter.value : "";
+  const selectedJob = jobTitleFilter ? jobTitleFilter.value : "";
+
+  const rows = document.querySelectorAll("#employeeTableBody tr.employee-row");
+  let visibleCount = 0;
+
+  rows.forEach((row) => {
+    const text = row.innerText.toLowerCase();
+    const cells = row.getElementsByTagName("td");
+
+    const rowGender = cells[6] ? cells[6].innerText.trim() : "";
+    const rowJob = cells[7] ? cells[7].innerText.trim() : "";
+
+    const matchesSearch = query === "" || text.includes(query);
+    const matchesGender = selectedGender === "" || rowGender === selectedGender;
+    const matchesJob = selectedJob === "" || rowJob === selectedJob;
+
+    if (matchesSearch && matchesGender && matchesJob) {
+      row.style.display = "";
+      visibleCount++;
+    } else {
+      row.style.display = "none";
+    }
+  });
+
+  const recordCount = document.getElementById("recordCount");
+  if (recordCount) {
+    recordCount.textContent = `${visibleCount} Employee${visibleCount === 1 ? '' : 's'}`;
+  }
+
+  const emptyState = document.getElementById("emptyState");
+  if (emptyState) {
+    emptyState.style.display = visibleCount === 0 ? "block" : "none";
   }
 }
 
-function closeAllModals() {
-  document.querySelectorAll('.modal-overlay').forEach((modal) => {
-    modal.classList.remove('active');
+/**
+ * Client-Side Validation Helper Functions
+ */
+function showFieldError(fieldId, message) {
+  const input = document.getElementById(fieldId);
+  if (!input) return;
+
+  input.classList.add("input-error");
+
+  let errorSpan = input.parentElement.querySelector(".field-error-msg");
+  if (!errorSpan) {
+    errorSpan = document.createElement("span");
+    errorSpan.className = "field-error-msg";
+    input.parentElement.appendChild(errorSpan);
+  }
+  errorSpan.textContent = message;
+}
+
+function clearValidationErrors(prefix = "") {
+  const fields = prefix === "edit"
+    ? ["editFirstName", "editMiddleInitial", "editLastName", "editEmail", "editMobileNumber", "editSex", "editJobTitle"]
+    : ["first_name", "middle_initial", "last_name", "email", "mobile_number", "sex", "job_title"];
+
+  fields.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.remove("input-error");
+      const err = el.parentElement.querySelector(".field-error-msg");
+      if (err) err.remove();
+    }
   });
 }
 
+function validateEmployeeData(prefix = "") {
+  clearValidationErrors(prefix);
+  let isValid = true;
+  const errors = [];
+
+  const isEdit = prefix === "edit";
+  const firstName = document.getElementById(isEdit ? "editFirstName" : "first_name").value.trim();
+  const mi = document.getElementById(isEdit ? "editMiddleInitial" : "middle_initial").value.trim().toUpperCase();
+  const lastName = document.getElementById(isEdit ? "editLastName" : "last_name").value.trim();
+  const email = document.getElementById(isEdit ? "editEmail" : "email").value.trim();
+  const mobile = document.getElementById(isEdit ? "editMobileNumber" : "mobile_number").value.trim();
+  const sex = document.getElementById(isEdit ? "editSex" : "sex").value.trim();
+  const jobTitle = document.getElementById(isEdit ? "editJobTitle" : "job_title").value.trim();
+
+  // First Name validation
+  if (!firstName) {
+    showFieldError(isEdit ? "editFirstName" : "first_name", "First name must not be empty.");
+    errors.push("First Name must not be empty.");
+    isValid = false;
+  } else if (firstName.length < 2) {
+    showFieldError(isEdit ? "editFirstName" : "first_name", "First name must be at least 2 characters.");
+    errors.push("First Name must be at least 2 characters.");
+    isValid = false;
+  }
+
+  // Middle Initial validation (Strictly 1 character VARCHAR(1))
+  if (mi && !/^[A-Z]{1}$/.test(mi)) {
+    showFieldError(isEdit ? "editMiddleInitial" : "middle_initial", "M.I. must be 1 letter only (e.g. A).");
+    errors.push("Middle Initial must be 1 letter only (e.g. A).");
+    isValid = false;
+  }
+
+  // Last Name validation
+  if (!lastName) {
+    showFieldError(isEdit ? "editLastName" : "last_name", "Last name must not be empty.");
+    errors.push("Last Name must not be empty.");
+    isValid = false;
+  } else if (lastName.length < 2) {
+    showFieldError(isEdit ? "editLastName" : "last_name", "Last name must be at least 2 characters.");
+    errors.push("Last Name must be at least 2 characters.");
+    isValid = false;
+  }
+
+  // Email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email) {
+    showFieldError(isEdit ? "editEmail" : "email", "Email address must not be empty.");
+    errors.push("Email address must not be empty.");
+    isValid = false;
+  } else if (!emailRegex.test(email)) {
+    showFieldError(isEdit ? "editEmail" : "email", "Email must be in a valid format (e.g. name@domain.com).");
+    errors.push("Email must be in a valid format (e.g. name@domain.com).");
+    isValid = false;
+  }
+
+  // Mobile Number validation
+  const cleanMobile = mobile.replace(/[^0-9+]/g, '');
+  if (!mobile) {
+    showFieldError(isEdit ? "editMobileNumber" : "mobile_number", "Mobile number must not be empty.");
+    errors.push("Mobile number must not be empty.");
+    isValid = false;
+  } else if (cleanMobile.length < 10 || cleanMobile.length > 15) {
+    showFieldError(isEdit ? "editMobileNumber" : "mobile_number", "Mobile number must be a valid 10-15 digit phone number.");
+    errors.push("Mobile number must be a valid 10-15 digit phone number (e.g. 09123456789).");
+    isValid = false;
+  }
+
+  // Gender validation
+  if (!sex || (sex !== "Male" && sex !== "Female")) {
+    showFieldError(isEdit ? "editSex" : "sex", "Please select a gender (Male or Female).");
+    errors.push("Please select a gender (Male or Female).");
+    isValid = false;
+  }
+
+  // Job Title validation
+  if (!jobTitle || jobTitle === "Select Job Title") {
+    showFieldError(isEdit ? "editJobTitle" : "job_title", "Please select a valid job title.");
+    errors.push("Please select a valid job title.");
+    isValid = false;
+  }
+
+  if (!isValid && errors.length > 0) {
+    const summary = errors.map((e, idx) => `${idx + 1}. ${e}`).join("\n");
+    alert(`Please correct the following errors:\n\n${summary}`);
+    showToast("error", "Validation Failed", "Please correct the highlighted form fields.");
+    return false;
+  }
+
+  return true;
+}
+
 /**
- * Toast Notification Banner
+ * Add Employee Modal Controls (PDF 3 Page 16)
+ */
+function openAddEmployeeModal() {
+  clearValidationErrors();
+
+  document.getElementById("first_name").value = "";
+  document.getElementById("middle_initial").value = "";
+  document.getElementById("last_name").value = "";
+  document.getElementById("email").value = "";
+  document.getElementById("mobile_number").value = "";
+  document.getElementById("sex").value = "";
+  document.getElementById("job_title").value = "Select Job Title";
+
+  const modal = document.getElementById("addEmployeeModal");
+  if (modal) {
+    modal.style.display = "flex";
+    const first = document.getElementById("first_name");
+    if (first) setTimeout(() => first.focus(), 80);
+  }
+}
+
+function closeAddEmployeeModal() {
+  const modal = document.getElementById("addEmployeeModal");
+  if (modal) modal.style.display = "none";
+  clearValidationErrors();
+}
+
+/**
+ * Add Employee to Database (POST request) (PDF 3 Page 16)
+ */
+function addEmployee() {
+  if (!validateEmployeeData()) {
+    return;
+  }
+
+  const firstName = document.getElementById("first_name").value.trim();
+  const mi = document.getElementById("middle_initial").value.trim().toUpperCase();
+  const lastName = document.getElementById("last_name").value.trim();
+  const email = document.getElementById("email").value.trim();
+  const mobile = document.getElementById("mobile_number").value.trim();
+  const sex = document.getElementById("sex").value.trim();
+  const jobTitle = document.getElementById("job_title").value.trim();
+
+  fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      first_name: firstName,
+      middle_initial: mi,
+      last_name: lastName,
+      email: email,
+      mobile_number: mobile,
+      sex: sex,
+      job_title: jobTitle
+    })
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.status === "success") {
+        alert(data.message || "Employee added successfully!");
+        showToast("success", "Employee Added Successfully!", data.message || `Added "${firstName} ${lastName}" to the database.`);
+        closeAddEmployeeModal();
+        loadEmployees();
+      } else {
+        alert("Failed to add employee:\n" + (data.message || "Unknown error occurred."));
+        showToast("error", "Error Adding Employee", data.message || "Failed to add employee record.");
+        if (data.field) {
+          showFieldError(data.field, data.message);
+        }
+      }
+    })
+    .catch((error) => {
+      console.error("Error adding employee:", error);
+      alert("Network Error: Failed to communicate with API server.");
+      showToast("error", "Network Error", "Failed to communicate with API server.");
+    });
+}
+
+/**
+ * Edit Employee Modal Controls (PDF 3 Page 19)
+ */
+function openEditModal(id, firstName, middleInitial, lastName, email, mobile, sex, jobTitle) {
+  clearValidationErrors("edit");
+
+  document.getElementById("editId").value = id;
+  document.getElementById("editFirstName").value = firstName;
+  document.getElementById("editMiddleInitial").value = middleInitial !== "null" && middleInitial !== "undefined" ? middleInitial : "";
+  document.getElementById("editLastName").value = lastName;
+  document.getElementById("editEmail").value = email;
+  document.getElementById("editMobileNumber").value = mobile;
+  document.getElementById("editSex").value = sex;
+  document.getElementById("editJobTitle").value = jobTitle;
+
+  const modal = document.getElementById("editModal");
+  if (modal) {
+    modal.style.display = "flex";
+    const first = document.getElementById("editFirstName");
+    if (first) setTimeout(() => first.focus(), 80);
+  }
+}
+
+function closeModal() {
+  const modal = document.getElementById("editModal");
+  if (modal) modal.style.display = "none";
+  clearValidationErrors("edit");
+}
+
+/**
+ * Update Employee Details (PUT request) (PDF 3 Page 19)
+ */
+function updateEmployee() {
+  if (!validateEmployeeData("edit")) {
+    return;
+  }
+
+  const id = document.getElementById("editId").value;
+  const firstName = document.getElementById("editFirstName").value.trim();
+  const mi = document.getElementById("editMiddleInitial").value.trim().toUpperCase();
+  const lastName = document.getElementById("editLastName").value.trim();
+  const email = document.getElementById("editEmail").value.trim();
+  const mobile = document.getElementById("editMobileNumber").value.trim();
+  const sex = document.getElementById("editSex").value.trim();
+  const jobTitle = document.getElementById("editJobTitle").value.trim();
+
+  fetch(API_URL, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: id,
+      first_name: firstName,
+      middle_initial: mi,
+      last_name: lastName,
+      email: email,
+      mobile_number: mobile,
+      sex: sex,
+      job_title: jobTitle
+    })
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.status === "success") {
+        alert(data.message || "Employee updated successfully!");
+        showToast("success", "Employee Updated Successfully!", data.message || `Updated details for "${firstName} ${lastName}".`);
+        closeModal();
+        loadEmployees();
+      } else {
+        alert("Failed to update employee:\n" + (data.message || "Unknown error occurred."));
+        showToast("error", "Update Failed", data.message || "Failed to update employee.");
+        if (data.field) {
+          const editFieldId = "edit" + data.field.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+          showFieldError(editFieldId, data.message);
+        }
+      }
+    })
+    .catch((error) => {
+      console.error("Error updating employee:", error);
+      alert("Network Error: Failed to update employee details.");
+      showToast("error", "Network Error", "Failed to update employee details.");
+    });
+}
+
+/**
+ * Floating Toast Notification Banner
  */
 function showToast(type, title, message) {
-  const toast = document.createElement('div');
+  let container = document.getElementById("toastContainer");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toastContainer";
+    container.className = "toast-container";
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement("div");
   toast.className = `toast ${type}`;
 
-  const iconSvg = {
-    success: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,
-    error: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`,
-    info: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`
-  }[type] || '';
-
   toast.innerHTML = `
-    <div>${iconSvg}</div>
     <div class="toast-content">
       <h4>${escapeHtml(title)}</h4>
       <p>${escapeHtml(message)}</p>
     </div>
   `;
 
-  DOM.toastContainer.appendChild(toast);
+  container.appendChild(toast);
 
   setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateX(50px)';
-    toast.style.transition = 'all 0.3s ease';
+    toast.style.opacity = "0";
+    toast.style.transform = "translateX(40px)";
+    toast.style.transition = "all 0.3s ease";
     setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
 
 /**
- * Utility Functions
+ * Event Listeners & Modal Backdrop Clicks
  */
-function formatCurrency(amount) {
-  const num = parseFloat(amount) || 0;
-  return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+function setupEventListeners() {
+  // Click outside modal content to close
+  window.addEventListener("click", (event) => {
+    const addModal = document.getElementById("addEmployeeModal");
+    const editModal = document.getElementById("editModal");
+    const viewModal = document.getElementById("viewModal");
+    const deleteModal = document.getElementById("deleteModal");
+    if (event.target === addModal) closeAddEmployeeModal();
+    if (event.target === editModal) closeModal();
+    if (event.target === viewModal) closeViewModal();
+    if (event.target === deleteModal) closeDeleteModal();
+  });
 
-function getInitials(name) {
-  if (!name) return 'EM';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  // ESC key closes modals
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeAddEmployeeModal();
+      closeModal();
+      closeViewModal();
+      closeDeleteModal();
+    }
+  });
+
+  // Test DB connection button
+  const testBtn = document.getElementById("testConnectionBtn");
+  if (testBtn) {
+    testBtn.addEventListener("click", runConnectionTest);
   }
-  return parts[0].substring(0, 2).toUpperCase();
+
+  // Clear errors dynamically on input
+  document.querySelectorAll("input, select").forEach((el) => {
+    el.addEventListener("input", () => {
+      el.classList.remove("input-error");
+      const err = el.parentElement.querySelector(".field-error-msg");
+      if (err) err.remove();
+    });
+    el.addEventListener("change", () => {
+      el.classList.remove("input-error");
+      const err = el.parentElement.querySelector(".field-error-msg");
+      if (err) err.remove();
+    });
+  });
 }
 
-function getDeptClass(dept) {
-  if (!dept) return 'dept-default';
-  const clean = dept.toLowerCase().trim();
-  if (clean.includes('engineer') || clean.includes('dev')) return 'dept-engineering';
-  if (clean.includes('product')) return 'dept-product';
-  if (clean.includes('human') || clean.includes('hr')) return 'dept-hr';
-  if (clean.includes('finance') || clean.includes('account')) return 'dept-finance';
-  if (clean.includes('market')) return 'dept-marketing';
-  if (clean.includes('design') || clean.includes('ui') || clean.includes('ux')) return 'dept-design';
-  if (clean.includes('operat')) return 'dept-operations';
-  return 'dept-default';
-}
-
+/**
+ * String Escaping Utilities
+ */
 function escapeHtml(str) {
-  if (str === null || str === undefined) return '';
+  if (str === null || str === undefined) return "";
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function escapeQuote(str) {
-  if (!str) return '';
-  return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  if (!str) return "";
+  return String(str).replace(/'/g, "\\'").replace(/"/g, "&quot;");
 }
 
-/**
- * Handle Inline Employee Form Submission (Instructor Layout)
- */
-async function handleInlineFormSubmit(e) {
-  e.preventDefault();
-
-  const id = DOM.inlineId.value.trim();
-  const formData = {
-    name: DOM.inlineName.value.trim(),
-    email: DOM.inlineEmail.value.trim(),
-    position: DOM.inlinePosition.value.trim(),
-    department: DOM.inlineDepartment ? DOM.inlineDepartment.value : 'General',
-    salary: parseFloat(DOM.inlineSalary.value)
-  };
-
-  if (!formData.name || !formData.email || !formData.position || isNaN(formData.salary)) {
-    showToast('error', 'Validation Error', 'Please provide Name, Email, Position, and a numeric Salary.');
-    return;
-  }
-
-  DOM.inlineSubmitBtn.disabled = true;
-
-  try {
-    if (id) {
-      // PUT Request (Update)
-      formData.id = parseInt(id, 10);
-      const res = await fetch(AppState.apiEndpoint, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      const result = await res.json();
-      if (res.ok && (result.success || result.status === 'success')) {
-        showToast('success', 'Employee Updated', `Updated "${formData.name}" successfully.`);
-        resetInlineForm();
-        await loadEmployees();
-      } else {
-        showToast('error', 'Update Error', result.message || 'Failed to update employee.');
-      }
-    } else {
-      // POST Request (Add)
-      const res = await fetch(AppState.apiEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      const result = await res.json();
-      if (res.ok && (result.success || result.status === 'success')) {
-        showToast('success', 'Employee Added', `Added "${formData.name}" successfully.`);
-        resetInlineForm();
-        await loadEmployees();
-      } else {
-        showToast('error', 'Create Error', result.message || 'Failed to add employee.');
-      }
-    }
-  } catch (err) {
-    showToast('error', 'Network Error', 'Failed to communicate with REST API.');
-  } finally {
-    DOM.inlineSubmitBtn.disabled = false;
-  }
-}
-
-/**
- * Reset Inline Form back to Add Mode
- */
-function resetInlineForm() {
-  if (!DOM.inlineId) return;
-  DOM.inlineId.value = '';
-  DOM.inlineForm.reset();
-  if (DOM.inlineDepartment) DOM.inlineDepartment.value = '';
-  const modeBadge = document.getElementById('formModeBadge');
-  if (modeBadge) modeBadge.style.display = 'none';
-  DOM.formTitle.textContent = 'Add New Employee';
-  DOM.inlineSubmitBtn.innerHTML = `
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-    Add Employee
-  `;
-  DOM.inlineCancelBtn.style.display = 'none';
-}
-
+// Explicit Global Window Bindings for Inline HTML Callbacks
+window.deletePrompt = deletePrompt;
+window.closeDeleteModal = closeDeleteModal;
+window.handleConfirmDelete = handleConfirmDelete;
+window.deleteEmployee = deleteEmployee;
+window.openEditModal = openEditModal;
+window.viewEmployee = viewEmployee;
+window.closeViewModal = closeViewModal;
+window.editCurrentViewedEmployee = editCurrentViewedEmployee;
+window.openAddEmployeeModal = openAddEmployeeModal;
+window.closeAddEmployeeModal = closeAddEmployeeModal;
+window.closeModal = closeModal;
+window.addEmployee = addEmployee;
+window.updateEmployee = updateEmployee;
+window.filterEmployees = filterEmployees;
+window.runConnectionTest = runConnectionTest;
+window.loadEmployees = loadEmployees;
