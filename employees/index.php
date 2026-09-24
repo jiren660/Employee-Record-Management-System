@@ -1,9 +1,4 @@
 <?php
-/**
- * Employee Management System - Main GUI (HTML + PHP)
- * Western Mindanao State University - College of Computing Studies
- * Reference: 03-Simple-Web-Application-Development-with-API-implementation.pdf (Pages 6, 11, 12, 15, 18)
- */
 
 $dbPath = file_exists('../api/database.php') ? '../api/database.php' : (file_exists('api/database.php') ? 'api/database.php' : 'database.php');
 $testPath = file_exists('../class/DbTest.php') ? '../class/DbTest.php' : (file_exists('class/DbTest.php') ? 'class/DbTest.php' : 'DbTest.php');
@@ -50,12 +45,6 @@ $empJsPath = file_exists('employee.js') ? 'employee.js' : 'employees/employee.js
     <div class="navbar">
       <button id="menu-toggle" class="menu-toggle" aria-label="Toggle navigation menu">&#9776;</button>
       <div class="logo">Management Information System</div>
-      <ul class="menu">
-        <li><a href="#">Departments</a></li>
-        <li><a href="../employees/" class="active">Employees</a></li>
-        <li><a href="#">Products</a></li>
-        <li><a href="#">Orders</a></li>
-      </ul>
     </div>
   </div>
 
